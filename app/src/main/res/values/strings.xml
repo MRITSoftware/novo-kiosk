@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">GelaFit Kiosk Manager</string>
+    <string name="admin_label">GelaFit Admin</string>
+    <string name="admin_desc">Permite aplicar politicas de kiosk no dispositivo.</string>
+</resources>
