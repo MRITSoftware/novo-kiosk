@@ -54,6 +54,11 @@ class MainActivity : AppCompatActivity() {
         updateDeviceOwnerStatus()
     }
 
+    override fun onResume() {
+        super.onResume()
+        enforceKioskLockIfNeeded()
+    }
+
     private fun setupSearchableSelectors() {
         appsAdapter = ArrayAdapter(
             this,
@@ -78,18 +83,10 @@ class MainActivity : AppCompatActivity() {
     private fun fillDefaults() {
         val generatedDeviceId = DeviceIdentity.stableDeviceId(this)
         binding.etDeviceIdGerado.setText(generatedDeviceId)
-        if (binding.etBaseUrl.text.isNullOrBlank()) {
-            binding.etBaseUrl.setText(AppPrefs.DEFAULT_BASE_URL)
-        }
-        if (binding.etApiKey.text.isNullOrBlank()) {
-            binding.etApiKey.setText(AppPrefs.DEFAULT_ANON_KEY)
-        }
     }
 
     private fun loadConfig() {
         val config = AppPrefs.readConfig(this) ?: return
-        binding.etBaseUrl.setText(config.baseUrl)
-        binding.etApiKey.setText(config.apiKey)
         binding.etSiteId.setText(config.siteId)
         binding.etDeviceIdGerado.setText(config.deviceId)
 
@@ -126,8 +123,8 @@ class MainActivity : AppCompatActivity() {
         binding.etDeviceIdGerado.setText(generatedDeviceId)
 
         val config = OrchestratorConfig(
-            baseUrl = binding.etBaseUrl.text.toString(),
-            apiKey = binding.etApiKey.text.toString(),
+            baseUrl = AppPrefs.DEFAULT_BASE_URL,
+            apiKey = AppPrefs.DEFAULT_ANON_KEY,
             siteId = siteId,
             deviceId = generatedDeviceId,
             servidorPackage = servidor.packageName,
@@ -152,6 +149,25 @@ class MainActivity : AppCompatActivity() {
                     "Iniciado: devices.is_active=true e devices.kiosk_mode=true.\n" +
                         "Servidor e GelaFit GO em execucao."
                 )
+            }
+        }
+    }
+
+    private fun enforceKioskLockIfNeeded() {
+        val config = AppPrefs.readConfig(this) ?: return
+        lifecycleScope.launch(Dispatchers.IO) {
+            val state = SupabaseRepository(config).fetchDeviceState()
+            val shouldLock = state?.isActive == true && state.kioskMode
+            if (shouldLock) {
+                withContext(Dispatchers.Main) {
+                    val launchIntent =
+                        packageManager.getLaunchIntentForPackage(config.gelaFitGoPackage)
+                    if (launchIntent != null) {
+                        launchIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                        startActivity(launchIntent)
+                        moveTaskToBack(true)
+                    }
+                }
             }
         }
     }

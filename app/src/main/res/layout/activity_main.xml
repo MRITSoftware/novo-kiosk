@@ -10,25 +10,9 @@
         android:padding="16dp">
 
         <EditText
-            android:id="@+id/etBaseUrl"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:hint="Supabase URL (https://xxxx.supabase.co)"
-            android:inputType="textUri" />
-
-        <EditText
-            android:id="@+id/etApiKey"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="8dp"
-            android:hint="API Key (anon ou service key)"
-            android:inputType="textPassword" />
-
-        <EditText
             android:id="@+id/etSiteId"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="8dp"
             android:hint="Email da unidade (site_id)"
             android:inputType="textEmailAddress" />
 

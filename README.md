@@ -20,8 +20,7 @@ Sem alterar schema:
 
 ## Campos necessarios na tela do app
 
-- `Supabase URL` (ja vem preenchida por padrao)
-- `API Key` (ja vem preenchida por padrao)
+- `Supabase URL` e `API Key` ficam ocultas na interface (internas no app)
 - `Email da unidade` (salvo em `devices.site_id`)
 - `device_id` e gerado automaticamente pelo tablet
 - Selecao de apps instalados para:
@@ -29,6 +28,8 @@ Sem alterar schema:
   - GelaFit GO
 
 Observacao: a busca de apps agora aceita digitacao para filtrar mais rapido.
+
+Enquanto `devices.kiosk_mode = true` e `devices.is_active = true`, a tela de configuracao nao fica acessivel; o app volta automaticamente para o GelaFit GO.
 
 ## Build de APK no GitHub (sem Android Studio)
 

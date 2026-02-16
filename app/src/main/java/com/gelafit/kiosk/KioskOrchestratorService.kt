@@ -55,6 +55,7 @@ class KioskOrchestratorService : Service() {
 
     private suspend fun runLoop(localConfig: OrchestratorConfig) {
         while (serviceScope.isActive) {
+            var nextDelay = POLL_INTERVAL_MS
             try {
                 val repo = repository ?: break
                 repo.ensureDeviceRegistered()
@@ -65,6 +66,9 @@ class KioskOrchestratorService : Service() {
                     ensureAppsRunning(localConfig, state.kioskMode)
                     checkRemoteCommands(localConfig, repo)
                     updateNotification("Ativo: Servidor + GelaFit GO monitorados")
+                    if (state.kioskMode) {
+                        nextDelay = KIOSK_RELAUNCH_INTERVAL_MS
+                    }
                 } else {
                     sessionStarted = false
                     KioskPolicyManager.clearKioskPolicies(this)
@@ -73,7 +77,7 @@ class KioskOrchestratorService : Service() {
             } catch (_: Throwable) {
                 updateNotification("Falha de comunicacao. Tentando novamente...")
             }
-            delay(POLL_INTERVAL_MS)
+            delay(nextDelay)
         }
     }
 
@@ -179,6 +183,7 @@ class KioskOrchestratorService : Service() {
         private const val CHANNEL_ID = "gelafit_kiosk_channel"
         private const val NOTIFICATION_ID = 1001
         private const val POLL_INTERVAL_MS = 15_000L
+        private const val KIOSK_RELAUNCH_INTERVAL_MS = 3_000L
         private const val EXTRA_FORCE_START = "extra_force_start"
 
         fun start(context: android.content.Context, forceStart: Boolean = false) {
