@@ -19,12 +19,15 @@ Sem alterar schema:
 
 ## Campos necessarios na tela do app
 
-- `Supabase URL` (ex.: `https://xxxxx.supabase.co`)
-- `API Key` (preferencialmente anon com RLS)
-- `device_id` (mesmo valor da tabela `devices.device_id`)
+- `Supabase URL` (ja vem preenchida por padrao)
+- `API Key` (ja vem preenchida por padrao)
+- `Email da unidade` (salvo em `devices.site_id`)
+- `device_id` e gerado automaticamente pelo tablet
 - Selecao de apps instalados para:
   - Servidor
   - GelaFit GO
+
+Observacao: a busca de apps agora aceita digitacao para filtrar mais rapido.
 
 ## Build de APK no GitHub (sem Android Studio)
 

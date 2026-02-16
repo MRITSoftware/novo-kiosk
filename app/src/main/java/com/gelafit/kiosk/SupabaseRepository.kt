@@ -24,6 +24,37 @@ class SupabaseRepository(private val config: OrchestratorConfig) {
     private val client = OkHttpClient()
     private val jsonMediaType = "application/json; charset=utf-8".toMediaType()
 
+    fun ensureDeviceRegistered() {
+        val withSiteId = JSONObject()
+            .put("device_id", config.deviceId)
+            .put("site_id", config.siteId)
+            .put("unit_name", config.siteId)
+            .put("last_seen", Instant.now().toString())
+            .toString()
+
+        val upsertUrl = "${config.baseUrl}/rest/v1/devices"
+        val firstTry = baseRequest(upsertUrl)
+            .post(withSiteId.toRequestBody(jsonMediaType))
+            .header("Prefer", "resolution=merge-duplicates,return=minimal")
+            .build()
+
+        client.newCall(firstTry).execute().use { response ->
+            if (response.isSuccessful) return
+        }
+
+        // Fallback: se a coluna site_id nao existir no schema, registra so com unit_name.
+        val fallbackPayload = JSONObject()
+            .put("device_id", config.deviceId)
+            .put("unit_name", config.siteId)
+            .put("last_seen", Instant.now().toString())
+            .toString()
+        val fallback = baseRequest(upsertUrl)
+            .post(fallbackPayload.toRequestBody(jsonMediaType))
+            .header("Prefer", "resolution=merge-duplicates,return=minimal")
+            .build()
+        client.newCall(fallback).execute().close()
+    }
+
     fun fetchDeviceState(): DeviceState? {
         val deviceId = encode(config.deviceId)
         val url =

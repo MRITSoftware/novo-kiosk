@@ -25,12 +25,21 @@
             android:inputType="textPassword" />
 
         <EditText
-            android:id="@+id/etDeviceId"
+            android:id="@+id/etSiteId"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="8dp"
-            android:hint="device_id (tabela devices)"
-            android:inputType="text" />
+            android:hint="Email da unidade (site_id)"
+            android:inputType="textEmailAddress" />
+
+        <EditText
+            android:id="@+id/etDeviceIdGerado"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:enabled="false"
+            android:focusable="false"
+            android:hint="device_id gerado automaticamente" />
 
         <TextView
             android:layout_width="match_parent"
@@ -38,10 +47,12 @@
             android:layout_marginTop="16dp"
             android:text="Servidor (app em background):" />
 
-        <Spinner
-            android:id="@+id/spServidor"
+        <AutoCompleteTextView
+            android:id="@+id/actServidor"
             android:layout_width="match_parent"
-            android:layout_height="wrap_content" />
+            android:layout_height="wrap_content"
+            android:hint="Digite para buscar app do Servidor"
+            android:inputType="text" />
 
         <TextView
             android:layout_width="match_parent"
@@ -49,10 +60,12 @@
             android:layout_marginTop="16dp"
             android:text="GelaFit GO (app kiosk fixo):" />
 
-        <Spinner
-            android:id="@+id/spGelaFitGo"
+        <AutoCompleteTextView
+            android:id="@+id/actGelaFitGo"
             android:layout_width="match_parent"
-            android:layout_height="wrap_content" />
+            android:layout_height="wrap_content"
+            android:hint="Digite para buscar app do GelaFit GO"
+            android:inputType="text" />
 
         <Button
             android:id="@+id/btnSalvar"

@@ -47,6 +47,7 @@ class KioskOrchestratorService : Service() {
         while (serviceScope.isActive) {
             try {
                 val repo = repository ?: break
+                repo.ensureDeviceRegistered()
                 val state = repo.fetchDeviceState()
                 repo.touchLastSeen()
 
