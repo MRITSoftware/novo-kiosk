@@ -36,8 +36,18 @@ class KioskOrchestratorService : Service() {
             return START_NOT_STICKY
         }
         repository = SupabaseRepository(localConfig)
+        val forceStart = intent?.getBooleanExtra(EXTRA_FORCE_START, false) ?: false
 
         serviceScope.launch {
+            if (forceStart) {
+                val repo = repository
+                if (repo != null) {
+                    repo.ensureDeviceRegistered()
+                    repo.setDeviceState(isActive = true, kioskMode = true)
+                }
+                ensureAppsRunning(localConfig, kioskMode = true)
+                updateNotification("Iniciado manualmente: apps em execucao")
+            }
             runLoop(localConfig)
         }
         return START_STICKY
@@ -169,9 +179,11 @@ class KioskOrchestratorService : Service() {
         private const val CHANNEL_ID = "gelafit_kiosk_channel"
         private const val NOTIFICATION_ID = 1001
         private const val POLL_INTERVAL_MS = 15_000L
+        private const val EXTRA_FORCE_START = "extra_force_start"
 
-        fun start(context: android.content.Context) {
+        fun start(context: android.content.Context, forceStart: Boolean = false) {
             val intent = Intent(context, KioskOrchestratorService::class.java)
+            intent.putExtra(EXTRA_FORCE_START, forceStart)
             androidx.core.content.ContextCompat.startForegroundService(context, intent)
         }
 

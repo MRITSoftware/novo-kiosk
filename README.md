@@ -16,6 +16,7 @@ Sem alterar schema:
 - Comando `restart_apps`: relanca Servidor + GelaFit GO.
 - Marca comando como executado (`executed = true`, `executed_at = now()`).
 - Atualiza `devices.last_seen`.
+- Ao clicar em **Iniciar** no app, grava `devices.is_active = true` e `devices.kiosk_mode = true`.
 
 ## Campos necessarios na tela do app
 

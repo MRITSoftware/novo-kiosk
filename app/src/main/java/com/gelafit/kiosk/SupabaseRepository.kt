@@ -135,6 +135,21 @@ class SupabaseRepository(private val config: OrchestratorConfig) {
         client.newCall(request).execute().close()
     }
 
+    fun setDeviceState(isActive: Boolean, kioskMode: Boolean) {
+        val deviceId = encode(config.deviceId)
+        val url = "${config.baseUrl}/rest/v1/devices?device_id=eq.$deviceId"
+        val payload = JSONObject()
+            .put("is_active", isActive)
+            .put("kiosk_mode", kioskMode)
+            .put("last_seen", Instant.now().toString())
+            .toString()
+        val request = baseRequest(url)
+            .patch(payload.toRequestBody(jsonMediaType))
+            .header("Prefer", "return=minimal")
+            .build()
+        client.newCall(request).execute().close()
+    }
+
     private fun baseRequest(url: String): Request.Builder {
         return Request.Builder()
             .url(url)

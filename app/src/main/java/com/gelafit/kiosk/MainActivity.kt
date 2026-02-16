@@ -9,13 +9,20 @@ import android.provider.Settings
 import android.widget.AdapterView
 import android.widget.ArrayAdapter
 import androidx.appcompat.app.AppCompatActivity
+import androidx.lifecycle.lifecycleScope
 import com.gelafit.kiosk.databinding.ActivityMainBinding
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
-data class InstalledApp(val label: String, val packageName: String)
+data class InstalledApp(val label: String, val packageName: String) {
+    override fun toString(): String = "$label ($packageName)"
+}
 
 class MainActivity : AppCompatActivity() {
     private lateinit var binding: ActivityMainBinding
     private var installedApps: List<InstalledApp> = emptyList()
+    private lateinit var appsAdapter: ArrayAdapter<InstalledApp>
     private var servidorSelecionado: InstalledApp? = null
     private var gelaFitGoSelecionado: InstalledApp? = null
 
@@ -31,9 +38,7 @@ class MainActivity : AppCompatActivity() {
 
         binding.btnSalvar.setOnClickListener { saveConfig() }
         binding.btnIniciar.setOnClickListener {
-            saveConfig()
-            KioskOrchestratorService.start(this)
-            updateInfo("Orquestrador iniciado.")
+            startFlow()
         }
         binding.btnParar.setOnClickListener {
             KioskOrchestratorService.stop(this)
@@ -50,24 +55,23 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun setupSearchableSelectors() {
-        val labels = installedApps.map { "${it.label} (${it.packageName})" }
-        val adapter = ArrayAdapter(
+        appsAdapter = ArrayAdapter(
             this,
             android.R.layout.simple_spinner_dropdown_item,
-            labels
+            installedApps
         )
-        binding.actServidor.setAdapter(adapter)
-        binding.actGelaFitGo.setAdapter(adapter)
+        binding.actServidor.setAdapter(appsAdapter)
+        binding.actGelaFitGo.setAdapter(appsAdapter)
         binding.actServidor.threshold = 1
         binding.actGelaFitGo.threshold = 1
 
         binding.actServidor.onItemClickListener =
-            AdapterView.OnItemClickListener { _, _, position, _ ->
-                servidorSelecionado = installedApps.getOrNull(position)
+            AdapterView.OnItemClickListener { parent, _, position, _ ->
+                servidorSelecionado = parent.getItemAtPosition(position) as? InstalledApp
             }
         binding.actGelaFitGo.onItemClickListener =
-            AdapterView.OnItemClickListener { _, _, position, _ ->
-                gelaFitGoSelecionado = installedApps.getOrNull(position)
+            AdapterView.OnItemClickListener { parent, _, position, _ ->
+                gelaFitGoSelecionado = parent.getItemAtPosition(position) as? InstalledApp
             }
     }
 
@@ -92,30 +96,30 @@ class MainActivity : AppCompatActivity() {
         servidorSelecionado = installedApps.firstOrNull { it.packageName == config.servidorPackage }
         gelaFitGoSelecionado = installedApps.firstOrNull { it.packageName == config.gelaFitGoPackage }
         servidorSelecionado?.let {
-            binding.actServidor.setText("${it.label} (${it.packageName})", false)
+            binding.actServidor.setText(it.toString(), false)
         }
         gelaFitGoSelecionado?.let {
-            binding.actGelaFitGo.setText("${it.label} (${it.packageName})", false)
+            binding.actGelaFitGo.setText(it.toString(), false)
         }
     }
 
-    private fun saveConfig() {
+    private fun saveConfig(): OrchestratorConfig? {
         if (installedApps.isEmpty()) {
             updateInfo("Nenhum app launchable encontrado.")
-            return
+            return null
         }
 
         val servidor = servidorSelecionado ?: findAppBySearch(binding.actServidor.text.toString())
         val go = gelaFitGoSelecionado ?: findAppBySearch(binding.actGelaFitGo.text.toString())
         if (servidor == null || go == null) {
             updateInfo("Selecione apps validos para Servidor e GelaFit GO.")
-            return
+            return null
         }
 
         val siteId = binding.etSiteId.text.toString().trim()
         if (siteId.isBlank()) {
             updateInfo("Informe o email da unidade para salvar em devices.site_id.")
-            return
+            return null
         }
 
         val generatedDeviceId = DeviceIdentity.stableDeviceId(this)
@@ -133,6 +137,23 @@ class MainActivity : AppCompatActivity() {
         updateInfo(
             "Configuracao salva.\nsite_id: $siteId\ndevice_id: $generatedDeviceId\nServidor: ${servidor.packageName}\nGelaFit GO: ${go.packageName}"
         )
+        return config
+    }
+
+    private fun startFlow() {
+        val config = saveConfig() ?: return
+        lifecycleScope.launch(Dispatchers.IO) {
+            val repo = SupabaseRepository(config)
+            repo.ensureDeviceRegistered()
+            repo.setDeviceState(isActive = true, kioskMode = true)
+            withContext(Dispatchers.Main) {
+                KioskOrchestratorService.start(this@MainActivity, forceStart = true)
+                updateInfo(
+                    "Iniciado: devices.is_active=true e devices.kiosk_mode=true.\n" +
+                        "Servidor e GelaFit GO em execucao."
+                )
+            }
+        }
     }
 
     private fun findAppBySearch(text: String): InstalledApp? {
@@ -141,8 +162,7 @@ class MainActivity : AppCompatActivity() {
         val byPackage = installedApps.firstOrNull { it.packageName.equals(query, ignoreCase = true) }
         if (byPackage != null) return byPackage
         val exactFormatted = installedApps.firstOrNull {
-            val full = "${it.label} (${it.packageName})"
-            full.equals(query, ignoreCase = true)
+            it.toString().equals(query, ignoreCase = true)
         }
         if (exactFormatted != null) return exactFormatted
 
