@@ -139,12 +139,17 @@ class MainActivity : AppCompatActivity() {
 
     private fun startFlow() {
         val config = saveConfig() ?: return
+        AppPrefs.setLocalKioskLock(this, true)
         lifecycleScope.launch(Dispatchers.IO) {
             val repo = SupabaseRepository(config)
             repo.ensureDeviceRegistered()
             repo.setDeviceState(isActive = true, kioskMode = true)
             withContext(Dispatchers.Main) {
-                KioskOrchestratorService.start(this@MainActivity, forceStart = true)
+                KioskOrchestratorService.start(
+                    this@MainActivity,
+                    forceStart = true,
+                    restartSequence = true
+                )
                 updateInfo(
                     "Iniciado: devices.is_active=true e devices.kiosk_mode=true.\n" +
                         "Servidor e GelaFit GO em execucao."
@@ -155,9 +160,20 @@ class MainActivity : AppCompatActivity() {
 
     private fun enforceKioskLockIfNeeded() {
         val config = AppPrefs.readConfig(this) ?: return
+        if (AppPrefs.isLocalKioskLockEnabled(this)) {
+            val launchIntent = packageManager.getLaunchIntentForPackage(config.gelaFitGoPackage)
+            if (launchIntent != null) {
+                launchIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+                startActivity(launchIntent)
+                moveTaskToBack(true)
+            }
+            return
+        }
+
         lifecycleScope.launch(Dispatchers.IO) {
             val state = SupabaseRepository(config).fetchDeviceState()
             val shouldLock = state?.isActive == true && state.kioskMode
+            AppPrefs.setLocalKioskLock(this@MainActivity, shouldLock)
             if (shouldLock) {
                 withContext(Dispatchers.Main) {
                     val launchIntent =

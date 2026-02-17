@@ -31,6 +31,11 @@ Observacao: a busca de apps agora aceita digitacao para filtrar mais rapido.
 
 Enquanto `devices.kiosk_mode = true` e `devices.is_active = true`, a tela de configuracao nao fica acessivel; o app volta automaticamente para o GelaFit GO.
 
+Ao clicar em **Iniciar**, o fluxo reinicia a sessao e executa:
+1) abre o Servidor
+2) aguarda 5 segundos
+3) abre o GelaFit GO em kiosk
+
 ## Build de APK no GitHub (sem Android Studio)
 
 1. Crie um repositorio no GitHub e envie estes arquivos.

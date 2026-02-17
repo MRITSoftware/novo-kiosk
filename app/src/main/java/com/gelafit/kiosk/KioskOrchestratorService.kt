@@ -40,6 +40,7 @@ class KioskOrchestratorService : Service() {
         }
         repository = SupabaseRepository(localConfig)
         val forceStart = intent?.getBooleanExtra(EXTRA_FORCE_START, false) ?: false
+        val restartSequence = intent?.getBooleanExtra(EXTRA_RESTART_SEQUENCE, false) ?: false
 
         serviceScope.launch {
             if (forceStart) {
@@ -47,6 +48,10 @@ class KioskOrchestratorService : Service() {
                 if (repo != null) {
                     repo.ensureDeviceRegistered()
                     repo.setDeviceState(isActive = true, kioskMode = true)
+                }
+                AppPrefs.setLocalKioskLock(this@KioskOrchestratorService, true)
+                if (restartSequence) {
+                    sessionStarted = false
                 }
                 ensureAppsRunning(localConfig, kioskMode = true)
                 updateNotification("Iniciado manualmente: apps em execucao")
@@ -66,6 +71,7 @@ class KioskOrchestratorService : Service() {
                 repo.touchLastSeen()
                 lastKnownActive = state?.isActive == true
                 lastKnownKioskMode = state?.kioskMode == true
+                AppPrefs.setLocalKioskLock(this, lastKnownActive && lastKnownKioskMode)
 
                 if (state?.isActive == true) {
                     ensureAppsRunning(localConfig, state.kioskMode)
@@ -79,6 +85,7 @@ class KioskOrchestratorService : Service() {
                     sessionStarted = false
                     lastKnownActive = false
                     lastKnownKioskMode = false
+                    AppPrefs.setLocalKioskLock(this, false)
                     KioskPolicyManager.clearKioskPolicies(this)
                     updateNotification("Inativo: aguardando devices.is_active = true")
                 }
@@ -151,7 +158,8 @@ class KioskOrchestratorService : Service() {
         launchIntent.addFlags(
             Intent.FLAG_ACTIVITY_NEW_TASK or
                 Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED or
-                Intent.FLAG_ACTIVITY_CLEAR_TOP
+                Intent.FLAG_ACTIVITY_CLEAR_TOP or
+                Intent.FLAG_ACTIVITY_CLEAR_TASK
         )
         startActivity(launchIntent)
         return true
@@ -168,6 +176,7 @@ class KioskOrchestratorService : Service() {
             Intent.FLAG_ACTIVITY_NEW_TASK or
                 Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED or
                 Intent.FLAG_ACTIVITY_CLEAR_TOP or
+                Intent.FLAG_ACTIVITY_CLEAR_TASK or
                 Intent.FLAG_ACTIVITY_SINGLE_TOP
         )
 
@@ -230,14 +239,20 @@ class KioskOrchestratorService : Service() {
     companion object {
         private const val CHANNEL_ID = "gelafit_kiosk_channel"
         private const val NOTIFICATION_ID = 1001
-        private const val POLL_INTERVAL_MS = 15_000L
+        private const val POLL_INTERVAL_MS = 5_000L
         private const val KIOSK_RELAUNCH_INTERVAL_MS = 2_000L
         private const val SERVIDOR_TO_GO_DELAY_MS = 5_000L
         private const val EXTRA_FORCE_START = "extra_force_start"
+        private const val EXTRA_RESTART_SEQUENCE = "extra_restart_sequence"
 
-        fun start(context: android.content.Context, forceStart: Boolean = false) {
+        fun start(
+            context: android.content.Context,
+            forceStart: Boolean = false,
+            restartSequence: Boolean = false
+        ) {
             val intent = Intent(context, KioskOrchestratorService::class.java)
             intent.putExtra(EXTRA_FORCE_START, forceStart)
+            intent.putExtra(EXTRA_RESTART_SEQUENCE, restartSequence)
             androidx.core.content.ContextCompat.startForegroundService(context, intent)
         }
 

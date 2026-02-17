@@ -23,6 +23,7 @@ object AppPrefs {
     private const val DEVICE_ID = "device_id"
     private const val SERVIDOR_PACKAGE = "servidor_package"
     private const val GELAFIT_GO_PACKAGE = "gelafit_go_package"
+    private const val LOCAL_KIOSK_LOCK = "local_kiosk_lock"
 
     fun saveConfig(context: Context, config: OrchestratorConfig) {
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
@@ -50,5 +51,16 @@ object AppPrefs {
             return null
         }
         return OrchestratorConfig(baseUrl, apiKey, siteId, deviceId, servidor, gelaFitGo)
+    }
+
+    fun setLocalKioskLock(context: Context, value: Boolean) {
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
+            .putBoolean(LOCAL_KIOSK_LOCK, value)
+            .apply()
+    }
+
+    fun isLocalKioskLockEnabled(context: Context): Boolean {
+        return context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+            .getBoolean(LOCAL_KIOSK_LOCK, false)
     }
 }
