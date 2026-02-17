@@ -4,6 +4,7 @@ import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.Service
+import android.app.ActivityOptions
 import android.content.Intent
 import android.os.Build
 import android.os.IBinder
@@ -19,6 +20,8 @@ import kotlinx.coroutines.launch
 class KioskOrchestratorService : Service() {
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private var sessionStarted = false
+    private var lastKnownActive = false
+    private var lastKnownKioskMode = false
     private var repository: SupabaseRepository? = null
     private var config: OrchestratorConfig? = null
 
@@ -61,9 +64,12 @@ class KioskOrchestratorService : Service() {
                 repo.ensureDeviceRegistered()
                 val state = repo.fetchDeviceState()
                 repo.touchLastSeen()
+                lastKnownActive = state?.isActive == true
+                lastKnownKioskMode = state?.kioskMode == true
 
                 if (state?.isActive == true) {
                     ensureAppsRunning(localConfig, state.kioskMode)
+                    ensureKioskForeground(localConfig, state.kioskMode)
                     checkRemoteCommands(localConfig, repo)
                     updateNotification("Ativo: Servidor + GelaFit GO monitorados")
                     if (state.kioskMode) {
@@ -71,10 +77,16 @@ class KioskOrchestratorService : Service() {
                     }
                 } else {
                     sessionStarted = false
+                    lastKnownActive = false
+                    lastKnownKioskMode = false
                     KioskPolicyManager.clearKioskPolicies(this)
                     updateNotification("Inativo: aguardando devices.is_active = true")
                 }
             } catch (_: Throwable) {
+                // Mantem o kiosk localmente mesmo durante intermitencia de rede.
+                if (lastKnownActive && lastKnownKioskMode) {
+                    ensureKioskForeground(localConfig, kioskMode = true)
+                }
                 updateNotification("Falha de comunicacao. Tentando novamente...")
             }
             delay(nextDelay)
@@ -84,11 +96,11 @@ class KioskOrchestratorService : Service() {
     private suspend fun ensureAppsRunning(localConfig: OrchestratorConfig, kioskMode: Boolean) {
         if (!sessionStarted) {
             launchApp(localConfig.servidorPackage)
-            delay(4000)
-            launchApp(localConfig.gelaFitGoPackage)
+            delay(SERVIDOR_TO_GO_DELAY_MS)
+            launchKioskApp(localConfig.gelaFitGoPackage, kioskMode)
             sessionStarted = true
         } else if (kioskMode) {
-            launchApp(localConfig.gelaFitGoPackage)
+            launchKioskApp(localConfig.gelaFitGoPackage, true)
         }
 
         if (kioskMode) {
@@ -105,15 +117,15 @@ class KioskOrchestratorService : Service() {
                 "restart_apps" -> {
                     sessionStarted = false
                     launchApp(localConfig.servidorPackage)
-                    delay(3000)
-                    launchApp(localConfig.gelaFitGoPackage)
+                    delay(SERVIDOR_TO_GO_DELAY_MS)
+                    launchKioskApp(localConfig.gelaFitGoPackage, true)
                     if (repo.markCommandExecuted(remote.id)) {
                         updateNotification("Comando restart_apps executado")
                     }
                 }
                 "start_kiosk" -> {
                     KioskPolicyManager.applyKioskPolicies(this, localConfig.gelaFitGoPackage)
-                    launchApp(localConfig.gelaFitGoPackage)
+                    launchKioskApp(localConfig.gelaFitGoPackage, true)
                     repo.markCommandExecuted(remote.id)
                 }
                 "stop_kiosk" -> {
@@ -128,6 +140,11 @@ class KioskOrchestratorService : Service() {
         }
     }
 
+    private fun ensureKioskForeground(localConfig: OrchestratorConfig, kioskMode: Boolean) {
+        if (!kioskMode) return
+        launchKioskApp(localConfig.gelaFitGoPackage, kioskMode = true)
+    }
+
     private fun launchApp(packageName: String): Boolean {
         if (!isInstalled(packageName)) return false
         val launchIntent = packageManager.getLaunchIntentForPackage(packageName) ?: return false
@@ -136,6 +153,37 @@ class KioskOrchestratorService : Service() {
                 Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED or
                 Intent.FLAG_ACTIVITY_CLEAR_TOP
         )
+        startActivity(launchIntent)
+        return true
+    }
+
+    private fun launchKioskApp(packageName: String, kioskMode: Boolean): Boolean {
+        if (!isInstalled(packageName)) return false
+        if (kioskMode) {
+            KioskPolicyManager.applyKioskPolicies(this, packageName)
+        }
+
+        val launchIntent = packageManager.getLaunchIntentForPackage(packageName) ?: return false
+        launchIntent.addFlags(
+            Intent.FLAG_ACTIVITY_NEW_TASK or
+                Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED or
+                Intent.FLAG_ACTIVITY_CLEAR_TOP or
+                Intent.FLAG_ACTIVITY_SINGLE_TOP
+        )
+
+        if (kioskMode && Build.VERSION.SDK_INT >= Build.VERSION_CODES.P &&
+            KioskPolicyManager.isDeviceOwner(this)
+        ) {
+            val options = ActivityOptions.makeBasic()
+            runCatching {
+                options.setLockTaskEnabled(true)
+                startActivity(launchIntent, options.toBundle())
+            }.onFailure {
+                startActivity(launchIntent)
+            }
+            return true
+        }
+
         startActivity(launchIntent)
         return true
     }
@@ -183,7 +231,8 @@ class KioskOrchestratorService : Service() {
         private const val CHANNEL_ID = "gelafit_kiosk_channel"
         private const val NOTIFICATION_ID = 1001
         private const val POLL_INTERVAL_MS = 15_000L
-        private const val KIOSK_RELAUNCH_INTERVAL_MS = 3_000L
+        private const val KIOSK_RELAUNCH_INTERVAL_MS = 2_000L
+        private const val SERVIDOR_TO_GO_DELAY_MS = 5_000L
         private const val EXTRA_FORCE_START = "extra_force_start"
 
         fun start(context: android.content.Context, forceStart: Boolean = false) {
