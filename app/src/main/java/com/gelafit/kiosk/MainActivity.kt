@@ -4,6 +4,8 @@ import android.content.Intent
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.os.PowerManager
 import android.provider.Settings
 import android.widget.AdapterView
@@ -140,6 +142,7 @@ class MainActivity : AppCompatActivity() {
     private fun startFlow() {
         val config = saveConfig() ?: return
         AppPrefs.setLocalKioskLock(this, true)
+        runInitialLaunchSequence(config)
         lifecycleScope.launch(Dispatchers.IO) {
             val repo = SupabaseRepository(config)
             repo.ensureDeviceRegistered()
@@ -156,6 +159,23 @@ class MainActivity : AppCompatActivity() {
                 )
             }
         }
+    }
+
+    private fun runInitialLaunchSequence(config: OrchestratorConfig) {
+        val servidorIntent = packageManager.getLaunchIntentForPackage(config.servidorPackage)
+        servidorIntent?.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+        if (servidorIntent != null) {
+            startActivity(servidorIntent)
+        }
+
+        Handler(Looper.getMainLooper()).postDelayed({
+            val goIntent = packageManager.getLaunchIntentForPackage(config.gelaFitGoPackage)
+            goIntent?.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+            if (goIntent != null) {
+                startActivity(goIntent)
+                moveTaskToBack(true)
+            }
+        }, 5_000L)
     }
 
     private fun enforceKioskLockIfNeeded() {

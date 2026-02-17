@@ -16,6 +16,7 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 class KioskOrchestratorService : Service() {
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -68,17 +69,30 @@ class KioskOrchestratorService : Service() {
                 val repo = repository ?: break
                 repo.ensureDeviceRegistered()
                 val state = repo.fetchDeviceState()
-                repo.touchLastSeen()
-                lastKnownActive = state?.isActive == true
-                lastKnownKioskMode = state?.kioskMode == true
-                AppPrefs.setLocalKioskLock(this, lastKnownActive && lastKnownKioskMode)
+                if (state != null) {
+                    repo.touchLastSeen()
+                    lastKnownActive = state.isActive
+                    lastKnownKioskMode = state.kioskMode
+                    AppPrefs.setLocalKioskLock(this, lastKnownActive && lastKnownKioskMode)
+                }
 
-                if (state?.isActive == true) {
-                    ensureAppsRunning(localConfig, state.kioskMode)
-                    ensureKioskForeground(localConfig, state.kioskMode)
+                val shouldRun = if (state != null) {
+                    state.isActive
+                } else {
+                    lastKnownActive || AppPrefs.isLocalKioskLockEnabled(this)
+                }
+                val kioskEnabled = if (state != null) {
+                    state.kioskMode
+                } else {
+                    lastKnownKioskMode || AppPrefs.isLocalKioskLockEnabled(this)
+                }
+
+                if (shouldRun) {
+                    ensureAppsRunning(localConfig, kioskEnabled)
+                    ensureKioskForeground(localConfig, kioskEnabled)
                     checkRemoteCommands(localConfig, repo)
                     updateNotification("Ativo: Servidor + GelaFit GO monitorados")
-                    if (state.kioskMode) {
+                    if (kioskEnabled) {
                         nextDelay = KIOSK_RELAUNCH_INTERVAL_MS
                     }
                 } else {
@@ -147,12 +161,12 @@ class KioskOrchestratorService : Service() {
         }
     }
 
-    private fun ensureKioskForeground(localConfig: OrchestratorConfig, kioskMode: Boolean) {
+    private suspend fun ensureKioskForeground(localConfig: OrchestratorConfig, kioskMode: Boolean) {
         if (!kioskMode) return
         launchKioskApp(localConfig.gelaFitGoPackage, kioskMode = true)
     }
 
-    private fun launchApp(packageName: String): Boolean {
+    private suspend fun launchApp(packageName: String): Boolean {
         if (!isInstalled(packageName)) return false
         val launchIntent = packageManager.getLaunchIntentForPackage(packageName) ?: return false
         launchIntent.addFlags(
@@ -161,11 +175,13 @@ class KioskOrchestratorService : Service() {
                 Intent.FLAG_ACTIVITY_CLEAR_TOP or
                 Intent.FLAG_ACTIVITY_CLEAR_TASK
         )
-        startActivity(launchIntent)
+        withContext(Dispatchers.Main) {
+            startActivity(launchIntent)
+        }
         return true
     }
 
-    private fun launchKioskApp(packageName: String, kioskMode: Boolean): Boolean {
+    private suspend fun launchKioskApp(packageName: String, kioskMode: Boolean): Boolean {
         if (!isInstalled(packageName)) return false
         if (kioskMode) {
             KioskPolicyManager.applyKioskPolicies(this, packageName)
@@ -184,16 +200,20 @@ class KioskOrchestratorService : Service() {
             KioskPolicyManager.isDeviceOwner(this)
         ) {
             val options = ActivityOptions.makeBasic()
-            runCatching {
-                options.setLockTaskEnabled(true)
-                startActivity(launchIntent, options.toBundle())
-            }.onFailure {
-                startActivity(launchIntent)
+            withContext(Dispatchers.Main) {
+                runCatching {
+                    options.setLockTaskEnabled(true)
+                    startActivity(launchIntent, options.toBundle())
+                }.onFailure {
+                    startActivity(launchIntent)
+                }
             }
             return true
         }
 
-        startActivity(launchIntent)
+        withContext(Dispatchers.Main) {
+            startActivity(launchIntent)
+        }
         return true
     }
 
